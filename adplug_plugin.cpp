@@ -638,38 +638,64 @@ static void adplug_static_init(const RVService* service_api) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static uint32_t adplug_get_scope_data(void* user_data, int channel, float* buffer, uint32_t num_samples) {
+static bool adplug_get_structure(void* user_data, RVVizInfo* out) {
     AdplugData* data = static_cast<AdplugData*>(user_data);
-    if (data == nullptr || data->opl == nullptr || buffer == nullptr) {
+    if (data == nullptr || out == nullptr) {
+        return false;
+    }
+
+    out->caps = RVVizCaps_Scope;
+    out->scroll_mode = RVScrollMode_Synchronized;
+    out->pattern_channel_count = 0;
+    out->scope_channel_count = FMOPL_SCOPE_NUM_CHANNELS;
+    out->column_count = 0;
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static uint32_t adplug_get_scope_channels(void* user_data, RVChannelDesc* out, uint32_t cap) {
+    (void)user_data;
+    if (out == nullptr) {
         return 0;
     }
 
-    if (!data->scope_enabled) {
-        FMOPL_EnableScopeCapture(1);
-        data->scope_enabled = true;
+    uint32_t count = FMOPL_SCOPE_NUM_CHANNELS;
+    if (count > cap)
+        count = cap;
+    for (uint32_t i = 0; i < count; i++) {
+        memset(out[i].name, 0, sizeof(out[i].name));
+        snprintf(reinterpret_cast<char*>(out[i].name), sizeof(out[i].name), "OPL %u", i + 1);
+        out[i].scope_width = 0;
+    }
+    return count;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static void adplug_set_scope_enabled(void* user_data, bool on) {
+    AdplugData* data = static_cast<AdplugData*>(user_data);
+    if (data == nullptr) {
+        return;
+    }
+
+    data->scope_enabled = on;
+    FMOPL_EnableScopeCapture(on ? 1 : 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static uint32_t adplug_get_scope_samples(void* user_data, int32_t channel, float* out, uint32_t cap) {
+    AdplugData* data = static_cast<AdplugData*>(user_data);
+    if (data == nullptr || data->opl == nullptr || out == nullptr || !data->scope_enabled) {
+        return 0;
     }
 
     // Map plugin channel to chip_index (0 or 1) and channel within chip (0-8)
     int chip_index = channel / FMOPL_SCOPE_NUM_CHANNELS;
     int ch = channel % FMOPL_SCOPE_NUM_CHANNELS;
 
-    return FMOPL_GetScopeData(chip_index, ch, buffer, num_samples);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-static uint32_t adplug_get_scope_channel_names(void* user_data, const char** names, uint32_t max_channels) {
-    (void)user_data;
-    static char s_name_bufs[18][16];
-    // Single OPL chip: 9 channels
-    uint32_t count = FMOPL_SCOPE_NUM_CHANNELS;
-    if (count > max_channels)
-        count = max_channels;
-    for (uint32_t i = 0; i < count; i++) {
-        snprintf(s_name_bufs[i], sizeof(s_name_bufs[i]), "OPL %u", i + 1);
-        names[i] = s_name_bufs[i];
-    }
-    return count;
+    return FMOPL_GetScopeData(chip_index, ch, out, cap);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -691,16 +717,19 @@ static RVPlaybackPlugin g_adplug_plugin = {
     adplug_metadata,
     adplug_static_init,
     nullptr, // settings_updated
-
-    // Tracker visualization API - not supported (OPL emulation)
-    nullptr, // get_tracker_info
-    nullptr, // get_pattern_cell
-    nullptr, // get_pattern_num_rows
-
-    // Scope visualization API
-    adplug_get_scope_data,
     nullptr, // static_destroy
-    adplug_get_scope_channel_names,
+
+    // Visualization: scope-only (OPL emulation, no pattern grid).
+    adplug_get_structure,
+    nullptr, // get_columns
+    nullptr, // get_pattern_channels
+    adplug_get_scope_channels,
+    nullptr, // get_position
+    nullptr, // get_channel_rows
+    nullptr, // get_cells
+    adplug_set_scope_enabled,
+    adplug_get_scope_samples,
+    nullptr, // get_vu
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
