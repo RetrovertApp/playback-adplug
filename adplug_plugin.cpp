@@ -431,7 +431,8 @@ static RVReadInfo adplug_read_data(void* user_data, RVReadData dest) {
         return info;
     }
 
-    uint32_t max_frames = dest.channels_output_max_bytes_size / (sizeof(int16_t) * 2);
+    uint32_t capacity_frames = dest.channels_output_max_bytes_size / (sizeof(int16_t) * 2);
+    uint32_t max_frames = dest.info.frame_count < capacity_frames ? dest.info.frame_count : capacity_frames;
 
     // Limit to our temp buffer size (OPL renders into temp_buffer)
     if (max_frames > data->temp_buffer_size / 2) {

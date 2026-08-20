@@ -1,0 +1,9 @@
+[plugin]
+name = "adplug"
+
+[data]
+entries = []
+
+[[fixtures]]
+file = "fixtures/TheAlibi.d00"
+sha256 = "070bcb87f935d38e8561cb72228af4067c8f4f02a51d84437208d9f830055e2e"
